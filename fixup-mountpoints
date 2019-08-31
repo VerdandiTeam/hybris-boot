@@ -175,6 +175,20 @@ case "$DEVICE" in
             "$@"
         ;;
 
+    "Z01R")
+        sed -i \
+            -e 's block/bootdevice/by-name/boot sde11 ' \
+            -e 's block/bootdevice/by-name/system sda14 ' \
+            -e 's block/bootdevice/by-name/userdata sda16 ' \
+            -e 's block/bootdevice/by-name/modem sde4 ' \
+            -e 's block/bootdevice/by-name/dsp sde9 ' \
+            -e 's block/bootdevice/by-name/factory sdf7 ' \
+            -e 's block/bootdevice/by-name/persist sda9 ' \
+            -e 's block/bootdevice/by-name/bluetooth sde5 ' \
+            -e 's block/bootdevice/by-name/vendor sde16 ' \
+            "$@"
+        ;;
+
     "suzu")
         sed -i \
             -e 's block/bootdevice/by-name/DDR mmcblk0p16 ' \

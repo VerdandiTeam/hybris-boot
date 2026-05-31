@@ -24,7 +24,8 @@ ui_print("Flashing vendor_boot.img ...");
 package_extract_file("vendor_boot.img", "/dev/block/bootdevice/by-name/vendor_boot_a");
 
 ui_print("Resizing userdata ...");
-run_program("/system/bin/resize2fs", "/dev/block/bootdevice/by-name/userdata");
+run_program("/system/bin/e2fsck", "-f", "-y", "/dev/block/bootdevice/by-name/userdata");
+run_program("/system/bin/resize2fs", "-f", "/dev/block/bootdevice/by-name/userdata");
 
 ui_print("Done!");
 

@@ -23,7 +23,9 @@ HYBRIS_PATH:=$(LOCAL_PATH)
 # image specific kernel COMMANDLINE vars is provided but whether it
 # works or not is down to your bootloader.
 
-HYBRIS_BOOTIMG_COMMANDLINE :=
+# DEBUG f21pro: PID 1 dies with SIGSEGV; print the faulting pc/registers
+# and full systemd debug output to kmsg (ends up in pstore)
+HYBRIS_BOOTIMG_COMMANDLINE := print-fatal-signals=1 printk.devkmsg=on systemd.log_level=debug systemd.log_target=kmsg
 HYBRIS_RECOVERYIMG_COMMANDLINE := bootmode=debug
 HYBRIS_BOOTLOGO :=
 # BOOT

@@ -431,6 +431,8 @@ if [ "$DONE_SWITCH" = "no" ]; then
     dd if=/dev/zero of=/dev/mmcblk0p36 bs=1M seek=32 count=4 2>/dev/null
     dd if=/pstore.log of=/dev/mmcblk0p36 bs=1M seek=32 conv=notrunc 2>/dev/null
     ( while :; do dmesg > /dev/mmcblk0p36; sync; sleep 1; done ) &
+    # DEBUG f21pro: also via sysctl in case the cmdline param is dropped
+    echo 1 > /proc/sys/kernel/print-fatal-signals 2>/dev/null
 
     # DEBUG f21pro: no working shell to send "continue", so don't halt:
     # give a 60 s telnet window on port 23 (welcome text = logs), then boot on

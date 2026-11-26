@@ -533,6 +533,18 @@ else
     # Now try to boot the real init
     # Prefer /sbin/preinit over /sbin/init
     [ -x /sbin/preinit ] && INIT=/sbin/preinit || INIT=/sbin/init
+    # DEBUG f21pro: systemd (PID 1) segfaults inside a shared library before
+    # it logs anything. Disable ASLR so the faulting pc printed by
+    # print-fatal-signals matches the load addresses listed here, and check
+    # whether systemd also crashes when it is not PID 1.
+    echo 0 > /proc/sys/kernel/randomize_va_space
+    SD=$(readlink -f /sbin/init)
+    kmsg_cmd() { "$@" 2>&1 | while read -r l; do echo "f21pro-debug: $l" > /dev/kmsg; done; }
+    echo "f21pro-debug: init -> $SD" > /dev/kmsg
+    for ld in /lib64/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1; do
+        [ -x $ld ] && { kmsg_cmd $ld --list $SD; break; }
+    done
+    kmsg_cmd $SD --version
     echo "f21pro-debug: exec $INIT" > /dev/kmsg
     exec $INIT --log-level=debug --log-target=kmsg &> /boot/systemd_stdouterr
     run_debug_session "init in real rootfs failed"

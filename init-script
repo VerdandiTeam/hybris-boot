@@ -316,6 +316,16 @@ usb_info() {
 }
 
 
+# DEBUG f21pro: busybox telnetd gives no shell here, so serve a plain shell
+# without a pty on port 24 (host: "nc 192.168.2.15 24", one line = one command)
+start_nc_shell() {
+    $EXPLICIT_BUSYBOX mkfifo /sh.fifo 2>/dev/null
+    ( while :; do
+        $EXPLICIT_BUSYBOX nc -l -p 24 < /sh.fifo | $EXPLICIT_BUSYBOX sh -i > /sh.fifo 2>&1
+      done ) &
+    NCSH=$!
+}
+
 run_debug_session() {
     CUSTOMPRODUCT=$1
     echo "########################## Debug session : $1"
@@ -445,9 +455,7 @@ if [ "$DONE_SWITCH" = "no" ]; then
         { cat /etc/issue.net; echo "===== full previous boot"; cat /prev-boot.log; } | nc -l -p 25
       done ) &
     NCLOG=$!
-    mkfifo /sh.fifo
-    ( while :; do nc -l -p 24 < /sh.fifo | /bin/sh > /sh.fifo 2>&1; done ) &
-    NCSH=$!
+    start_nc_shell
     sleep 60
     kill $NCLOG $NCSH
     killall nc telnetd udhcpd
@@ -512,11 +520,15 @@ else
 
     HALT_BOOT="n"
     [ -f /init_enter_debug2 ] && HALT_BOOT="y"
+    # DEBUG f21pro: shell on port 24 here too; it stays up while halted
+    # (continue with: echo continue > /init-ctl/stdin)
+    start_nc_shell
     [ -f /init_disable_telnet ] && DISABLE_TELNET="y"
     run_debug_session "init-debug in real rootfs" $HALT_BOOT
 
     # If we don't do this then udev will not be able to create /dev/block/*
     rm /dev/block
+    kill $NCSH 2>/dev/null; killall nc 2>/dev/null
 
     # Now try to boot the real init
     # Prefer /sbin/preinit over /sbin/init

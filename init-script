@@ -248,7 +248,13 @@ usb_setup_configfs() {
         mkdir $GADGET_DIR/g1/functions/rndis.usb0
         mkdir $GADGET_DIR/g1/functions/rndis_bam.rndis
     fi
-    echo $USB_FUNCTIONS | grep -q "ncm" && mkdir $GADGET_DIR/g1/functions/ncm.usb0
+    if echo $USB_FUNCTIONS | grep -q "ncm"; then
+        mkdir $GADGET_DIR/g1/functions/ncm.usb0
+        # Fixed MACs: u_ether picks random ones each boot otherwise, so the
+        # host interface (enx<mac>) gets a new name and loses its address
+        write $GADGET_DIR/g1/functions/ncm.usb0/dev_addr  "02:00:00:00:00:01"
+        write $GADGET_DIR/g1/functions/ncm.usb0/host_addr "02:00:00:00:00:02"
+    fi
     echo $USB_FUNCTIONS | grep -q "mass_storage" && mkdir $GADGET_DIR/g1/functions/storage.0
 
     mkdir $GADGET_DIR/g1/configs/c.1
@@ -416,6 +422,14 @@ if [ "$DONE_SWITCH" = "no" ]; then
     tr -d '\000' < /dev/mmcblk0p36 > /prev-boot.log 2>/dev/null
     cp /prev-boot.log /target/prev-boot.log 2>/dev/null
     dd if=/dev/zero of=/dev/mmcblk0p36 bs=1M count=8 2>/dev/null
+    # DEBUG f21pro: LK passes ramoops params, so a panic of the previous
+    # boot is in pstore; keep it at 32 MiB into vendor_boot_b and in /target
+    mkdir -p /sys/fs/pstore
+    mount -t pstore pstore /sys/fs/pstore 2>/dev/null
+    { echo "===== pstore $(date)"; for f in /sys/fs/pstore/*; do echo "== $f"; cat "$f"; done; } > /pstore.log 2>&1
+    cp /pstore.log /target/pstore.log 2>/dev/null
+    dd if=/dev/zero of=/dev/mmcblk0p36 bs=1M seek=32 count=4 2>/dev/null
+    dd if=/pstore.log of=/dev/mmcblk0p36 bs=1M seek=32 conv=notrunc 2>/dev/null
     ( while :; do dmesg > /dev/mmcblk0p36; sync; sleep 1; done ) &
 
     # DEBUG f21pro: no working shell to send "continue", so don't halt:

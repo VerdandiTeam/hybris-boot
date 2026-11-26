@@ -81,6 +81,23 @@ Then you can mount and modify exported mass storage on host. When done
 
 EOF
 fi
+
+# DEBUG f21pro: the shell hangs, but telnetd prints issue.net itself and
+# re-reads it for every connection, so keep appending logs to it
+if [ ! -e /tmp/issue-refresh ]; then
+    mkdir -p /tmp; touch /tmp/issue-refresh
+    cp /etc/issue.net /etc/issue.net.base
+    ( while :; do
+        {
+            cat /etc/issue.net.base
+            echo "===== previous boot (vendor_boot_b)"; tail -n 300 /prev-boot.log 2>/dev/null
+            echo "===== this boot: dmesg"; dmesg | tail -n 300
+            echo "===== /init.log"; tail -n 100 /init.log 2>/dev/null
+        } > /etc/issue.net.tmp
+        mv /etc/issue.net.tmp /etc/issue.net
+        sleep 2
+    done ) &
+fi
 }
 
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
@@ -387,6 +404,31 @@ if [ "$DONE_SWITCH" = "no" ]; then
     bootsplash
 
     mount_stowaways
+
+    # DEBUG f21pro: keep the previous boot's kernel log, then mirror this
+    # boot's to the unused vendor_boot_b (mmcblk0p36) until it reboots
+    tr -d '\000' < /dev/mmcblk0p36 > /prev-boot.log 2>/dev/null
+    cp /prev-boot.log /target/prev-boot.log 2>/dev/null
+    dd if=/dev/zero of=/dev/mmcblk0p36 bs=1M count=8 2>/dev/null
+    ( while :; do dmesg > /dev/mmcblk0p36; sync; sleep 1; done ) &
+
+    # DEBUG f21pro: no working shell to send "continue", so don't halt:
+    # give a 60 s telnet window on port 23 (welcome text = logs), then boot on
+    rm -f /target/init_enter_debug2
+    run_debug_session "f21pro log window" n
+    # telnetd hangs in pty setup, so also serve without a pty:
+    #   port 25: logs, sent once per connection
+    #   port 24: plain /bin/sh (no tty, no prompt)
+    ( while :; do
+        { cat /etc/issue.net; echo "===== full previous boot"; cat /prev-boot.log; } | nc -l -p 25
+      done ) &
+    NCLOG=$!
+    mkfifo /sh.fifo
+    ( while :; do nc -l -p 24 < /sh.fifo | /bin/sh > /sh.fifo 2>&1; done ) &
+    NCSH=$!
+    sleep 60
+    kill $NCLOG $NCSH
+    killall nc telnetd udhcpd
 
     # No target debug unless we debug here too (for now)
 

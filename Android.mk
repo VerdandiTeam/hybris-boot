@@ -437,8 +437,7 @@ PROFILES=$(shell find $(DEVICE_PACKAGE_OVERLAYS) -name power_profile.xml | wc -l
 ifeq ($(PROFILES),1)
 POWER_PROFILE := $(shell find $(DEVICE_PACKAGE_OVERLAYS) -name power_profile.xml)
 PROVIDE_POWER_PROFILE := 1
-endif
-ifeq ($(PROFILES),0)
+else ifeq ($(PROFILES),0)
 $(warning Missing power_profile.xml file)
 else
 $(error Multiple power_profile.xml files)

@@ -460,6 +460,12 @@ if [ "$DONE_SWITCH" = "no" ]; then
     # Disable mdev hotplug now - let udev handle it in main boot
     echo "" > /proc/sys/kernel/hotplug
 
+    # DEBUG f21pro: run this patched script as the rootfs init-debug too
+    # (original kept as init-debug.orig) and mark the stage in the kernel log
+    [ -f /target/init-debug.orig ] || cp /target/init-debug /target/init-debug.orig 2>/dev/null
+    cp /init /target/init-debug
+    echo "f21pro-debug: switch_root to rootfs" > /dev/kmsg
+
     if [ -f "/target/init-debug" ]; then
 	exec switch_root /target /init-debug &> /target/init-debug-stderrout
     else
@@ -478,6 +484,10 @@ else
 
     do_mount_devprocsys
 
+    # DEBUG f21pro: keep mirroring the kernel log from the rootfs side
+    echo "f21pro-debug: init-debug running in rootfs" > /dev/kmsg
+    ( while :; do $EXPLICIT_BUSYBOX dmesg > /dev/mmcblk0p36; sync; sleep 1; done ) &
+
     HALT_BOOT="n"
     [ -f /init_enter_debug2 ] && HALT_BOOT="y"
     [ -f /init_disable_telnet ] && DISABLE_TELNET="y"
@@ -489,6 +499,7 @@ else
     # Now try to boot the real init
     # Prefer /sbin/preinit over /sbin/init
     [ -x /sbin/preinit ] && INIT=/sbin/preinit || INIT=/sbin/init
+    echo "f21pro-debug: exec $INIT" > /dev/kmsg
     exec $INIT --log-level=debug --log-target=kmsg &> /boot/systemd_stdouterr
     run_debug_session "init in real rootfs failed"
 fi

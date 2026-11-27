@@ -82,22 +82,6 @@ Then you can mount and modify exported mass storage on host. When done
 EOF
 fi
 
-# DEBUG f21pro: the shell hangs, but telnetd prints issue.net itself and
-# re-reads it for every connection, so keep appending logs to it
-if [ ! -e /tmp/issue-refresh ]; then
-    mkdir -p /tmp; touch /tmp/issue-refresh
-    cp /etc/issue.net /etc/issue.net.base
-    ( while :; do
-        {
-            cat /etc/issue.net.base
-            echo "===== previous boot (vendor_boot_b)"; tail -n 300 /prev-boot.log 2>/dev/null
-            echo "===== this boot: dmesg"; dmesg | tail -n 300
-            echo "===== /init.log"; tail -n 100 /init.log 2>/dev/null
-        } > /etc/issue.net.tmp
-        mv /etc/issue.net.tmp /etc/issue.net
-        sleep 2
-    done ) &
-fi
 }
 
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
@@ -427,39 +411,6 @@ if [ "$DONE_SWITCH" = "no" ]; then
 
     mount_stowaways
 
-    # DEBUG f21pro: keep the previous boot's kernel log, then mirror this
-    # boot's to the unused vendor_boot_b (mmcblk0p36) until it reboots
-    tr -d '\000' < /dev/mmcblk0p36 > /prev-boot.log 2>/dev/null
-    cp /prev-boot.log /target/prev-boot.log 2>/dev/null
-    dd if=/dev/zero of=/dev/mmcblk0p36 bs=1M count=8 2>/dev/null
-    # DEBUG f21pro: LK passes ramoops params, so a panic of the previous
-    # boot is in pstore; keep it at 32 MiB into vendor_boot_b and in /target
-    mkdir -p /sys/fs/pstore
-    mount -t pstore pstore /sys/fs/pstore 2>/dev/null
-    { echo "===== pstore $(date)"; for f in /sys/fs/pstore/*; do echo "== $f"; cat "$f"; done; } > /pstore.log 2>&1
-    cp /pstore.log /target/pstore.log 2>/dev/null
-    dd if=/dev/zero of=/dev/mmcblk0p36 bs=1M seek=32 count=4 2>/dev/null
-    dd if=/pstore.log of=/dev/mmcblk0p36 bs=1M seek=32 conv=notrunc 2>/dev/null
-    ( while :; do dmesg > /dev/mmcblk0p36; sync; sleep 1; done ) &
-    # DEBUG f21pro: also via sysctl in case the cmdline param is dropped
-    echo 1 > /proc/sys/kernel/print-fatal-signals 2>/dev/null
-
-    # DEBUG f21pro: no working shell to send "continue", so don't halt:
-    # give a 60 s telnet window on port 23 (welcome text = logs), then boot on
-    rm -f /target/init_enter_debug2
-    run_debug_session "f21pro log window" n
-    # telnetd hangs in pty setup, so also serve without a pty:
-    #   port 25: logs, sent once per connection
-    #   port 24: plain /bin/sh (no tty, no prompt)
-    ( while :; do
-        { cat /etc/issue.net; echo "===== full previous boot"; cat /prev-boot.log; } | nc -l -p 25
-      done ) &
-    NCLOG=$!
-    start_nc_shell
-    sleep 60
-    kill $NCLOG $NCSH
-    killall nc telnetd udhcpd
-
     # No target debug unless we debug here too (for now)
 
     DBG_REASON=""
@@ -490,12 +441,6 @@ if [ "$DONE_SWITCH" = "no" ]; then
     # Disable mdev hotplug now - let udev handle it in main boot
     echo "" > /proc/sys/kernel/hotplug
 
-    # DEBUG f21pro: run this patched script as the rootfs init-debug too
-    # (original kept as init-debug.orig) and mark the stage in the kernel log
-    [ -f /target/init-debug.orig ] || cp /target/init-debug /target/init-debug.orig 2>/dev/null
-    cp /init /target/init-debug
-    echo "f21pro-debug: switch_root to rootfs" > /dev/kmsg
-
     if [ -f "/target/init-debug" ]; then
 	exec switch_root /target /init-debug &> /target/init-debug-stderrout
     else
@@ -514,10 +459,6 @@ else
 
     do_mount_devprocsys
 
-    # DEBUG f21pro: keep mirroring the kernel log from the rootfs side
-    echo "f21pro-debug: init-debug running in rootfs" > /dev/kmsg
-    ( while :; do $EXPLICIT_BUSYBOX dmesg > /dev/mmcblk0p36; sync; sleep 1; done ) &
-
     HALT_BOOT="n"
     [ -f /init_enter_debug2 ] && HALT_BOOT="y"
     # DEBUG f21pro: shell on port 24 here too; it stays up while halted
@@ -533,19 +474,6 @@ else
     # Now try to boot the real init
     # Prefer /sbin/preinit over /sbin/init
     [ -x /sbin/preinit ] && INIT=/sbin/preinit || INIT=/sbin/init
-    # DEBUG f21pro: systemd (PID 1) segfaults inside a shared library before
-    # it logs anything. Disable ASLR so the faulting pc printed by
-    # print-fatal-signals matches the load addresses listed here, and check
-    # whether systemd also crashes when it is not PID 1.
-    echo 0 > /proc/sys/kernel/randomize_va_space
-    SD=$(readlink -f /sbin/init)
-    kmsg_cmd() { "$@" 2>&1 | while read -r l; do echo "f21pro-debug: $l" > /dev/kmsg; done; }
-    echo "f21pro-debug: init -> $SD" > /dev/kmsg
-    for ld in /lib64/ld-linux-aarch64.so.1 /lib/ld-linux-aarch64.so.1; do
-        [ -x $ld ] && { kmsg_cmd $ld --list $SD; break; }
-    done
-    kmsg_cmd $SD --version
-    echo "f21pro-debug: exec $INIT" > /dev/kmsg
     exec $INIT --log-level=debug --log-target=kmsg &> /boot/systemd_stdouterr
     run_debug_session "init in real rootfs failed"
 fi

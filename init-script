@@ -86,13 +86,9 @@ fi
 
 export PATH=/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin:/usr/local/sbin
 
-# USB network function: rndis or ncm. f21pro uses ncm: over RNDIS, TCP
-# streams from the device stall after the first packet.
-USB_NET=ncm
-
-# Default setting is $USB_NET - add mass_storage for a debug boot
+# Default setting is rndis - add mass_storage for a debug boot
 # enable using usb_setup
-USB_FUNCTIONS=$USB_NET
+USB_FUNCTIONS=rndis
 
 ANDROID_USB=/sys/class/android_usb/android0
 GADGET_DIR=/config/usb_gadget
@@ -232,7 +228,6 @@ usb_setup_configfs() {
         mkdir $GADGET_DIR/g1/functions/rndis.usb0
         mkdir $GADGET_DIR/g1/functions/rndis_bam.rndis
     fi
-    echo $USB_FUNCTIONS | grep -q "ncm" && mkdir $GADGET_DIR/g1/functions/ncm.usb0
     echo $USB_FUNCTIONS | grep -q "mass_storage" && mkdir $GADGET_DIR/g1/functions/storage.0
 
     mkdir $GADGET_DIR/g1/configs/c.1
@@ -243,7 +238,6 @@ usb_setup_configfs() {
         ln -s $GADGET_DIR/g1/functions/rndis.usb0 $GADGET_DIR/g1/configs/c.1
         ln -s $GADGET_DIR/g1/functions/rndis_bam.rndis $GADGET_DIR/g1/configs/c.1
     fi
-    echo $USB_FUNCTIONS | grep -q "ncm" && ln -s $GADGET_DIR/g1/functions/ncm.usb0 $GADGET_DIR/g1/configs/c.1
     echo $USB_FUNCTIONS | grep -q "mass_storage" && ln -s $GADGET_DIR/g1/functions/storage.0 $GADGET_DIR/g1/configs/c.1
 
     udc="$(get_opt androidboot.usbcontroller | head -1)"
@@ -410,7 +404,7 @@ if [ "$DONE_SWITCH" = "no" ]; then
     DBG_REASON=""
     [ -e /diagnosis.log ] && DBG_REASON="Refusing to boot. See /diagnosis.log (in initrd only)"
     [ "$(get_opt bootmode)" = "debug" ] && DBG_REASON="bootmode=debug on kernel command line"
-    [ x$ALWAYSDEBUG = x1 ] && DBG_REASON="Always debug: $USB_NET + mass_storage"
+    [ x$ALWAYSDEBUG = x1 ] && DBG_REASON="Always debug: rndis + mass_storage"
     [ -f /target/init_enter_debug ] && DBG_REASON="/init_enter_debug exists"
     [ -f /target/init_disable_telnet ] && DISABLE_TELNET="y"
 
@@ -420,7 +414,7 @@ if [ "$DONE_SWITCH" = "no" ]; then
 	if [ -f $lun ]; then echo /dev/mmcblk0 > $lun; fi
 	lun=/sys/class/android_usb/f_mass_storage/lun0/file
 	if [ -f $lun ]; then echo /dev/mmcblk0 > $lun; fi
-	USB_FUNCTIONS=$USB_NET,mass_storage
+	USB_FUNCTIONS=rndis,mass_storage
 
 	run_debug_session $DBG_REASON
 
@@ -428,7 +422,7 @@ if [ "$DONE_SWITCH" = "no" ]; then
 	killall telnetd
 	killall udhcpd
 
-	USB_FUNCTIONS=$USB_NET
+	USB_FUNCTIONS=rndis
 	usb_setup "Mer Debug: done debug, disabling storage"
     fi
 

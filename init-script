@@ -232,13 +232,7 @@ usb_setup_configfs() {
         mkdir $GADGET_DIR/g1/functions/rndis.usb0
         mkdir $GADGET_DIR/g1/functions/rndis_bam.rndis
     fi
-    if echo $USB_FUNCTIONS | grep -q "ncm"; then
-        mkdir $GADGET_DIR/g1/functions/ncm.usb0
-        # Fixed MACs: u_ether picks random ones each boot otherwise, so the
-        # host interface (enx<mac>) gets a new name and loses its address
-        write $GADGET_DIR/g1/functions/ncm.usb0/dev_addr  "02:00:00:00:00:01"
-        write $GADGET_DIR/g1/functions/ncm.usb0/host_addr "02:00:00:00:00:02"
-    fi
+    echo $USB_FUNCTIONS | grep -q "ncm" && mkdir $GADGET_DIR/g1/functions/ncm.usb0
     echo $USB_FUNCTIONS | grep -q "mass_storage" && mkdir $GADGET_DIR/g1/functions/storage.0
 
     mkdir $GADGET_DIR/g1/configs/c.1
